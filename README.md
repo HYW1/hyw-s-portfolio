@@ -1,43 +1,35 @@
 # HEYIWEN | Experience Designer Portfolio
 
-A minimalist portfolio built with **Vite + React**, using **Notion** as the CMS.
+A minimalist, high-performance portfolio for UI/UX designers, powered by **Notion** as the CMS and **Google Gemini AI**.
 
-## Local development
+## ✨ Features
+- **Notion CMS**: Update content directly in Notion.
+- **Gemini AI**: Interactive chatbot for visitors.
+- **Responsive**: Mobile-first design.
 
-```bash
-npm install
-npm run dev
-```
+## 🚀 Quick Start
 
-## Deploy to Vercel (Notion data available)
+1. **Clone & Install**
+   ```bash
+   git clone <your-repo-url>
+   npm install
+   ```
 
-This project now reads Notion data through a Vercel Serverless Function at `api/notion.ts`.
-Your Notion token stays on the server side and is not exposed in the browser.
+2. **Configure Environment**
+   Create a `.env` file:
+   ```env
+   REACT_APP_NOTION_TOKEN=your_token
+   REACT_APP_NOTION_DATABASE_ID=your_database_id
+   API_KEY=your_google_ai_key
+   ```
 
-### Required environment variables (Vercel Project Settings)
+3. **Run Locally**
+   ```bash
+   npm run dev
+   ```
 
-```env
-NOTION_TOKEN=secret_xxx
-NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-# optional: profile page icon source
-NOTION_PROFILE_PAGE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+4. **Deploy**
+   Push to GitHub main branch to trigger the deployment workflow (configured in `.github/workflows/deploy.yml`).
 
-> Important: Share your Notion database/page with the integration connected to `NOTION_TOKEN`, otherwise the API will return permission errors.
-
-## Notion database property mapping
-
-Use these property names in your database:
-
-- `Title` (title)
-- `Summary` (rich text)
-- `Date` (date)
-- `Cover` (files)
-- `Tags` (multi-select)
-- `Featured` (checkbox, optional)
-
-## Build
-
-```bash
-npm run build
-```
+---
+© 2024 HEYIWEN Studio
