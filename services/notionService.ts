@@ -30,6 +30,11 @@ const fallbackAvatar: Avatar = {
   value: '👋',
 };
 
+function withFreshness(url: string) {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}t=${Date.now()}`;
+}
+
 async function safeJson<T>(input: Response): Promise<T | null> {
   try {
     return (await input.json()) as T;
@@ -40,12 +45,14 @@ async function safeJson<T>(input: Response): Promise<T | null> {
 
 export async function getProjects(): Promise<Project[]> {
   try {
-    const response = await fetch(`${API_BASE}?action=projects`, {
+    const response = await fetch(withFreshness(`${API_BASE}?action=projects`), {
+      cache: 'no-store',
       headers: { Accept: 'application/json' },
     });
 
     if (!response.ok) {
-      console.warn(`Projects API failed: ${response.status}`);
+      const error = await safeJson<{ error?: string }>(response);
+      console.warn(`Projects API failed: ${response.status}`, error?.error ?? 'No error body');
       return fallbackProjects;
     }
 
@@ -60,7 +67,8 @@ export async function getProjects(): Promise<Project[]> {
 
 export async function getProfileIcon(): Promise<Avatar> {
   try {
-    const response = await fetch(`${API_BASE}?action=profile-icon`, {
+    const response = await fetch(withFreshness(`${API_BASE}?action=profile-icon`), {
+      cache: 'no-store',
       headers: { Accept: 'application/json' },
     });
 
