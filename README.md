@@ -1,35 +1,64 @@
 # HEYIWEN | Experience Designer Portfolio
 
-A minimalist, high-performance portfolio for UI/UX designers, powered by **Notion** as the CMS and **Google Gemini AI**.
+A minimalist portfolio built with **Vite + React**, using **Notion** as the CMS.
 
-## ✨ Features
-- **Notion CMS**: Update content directly in Notion.
-- **Gemini AI**: Interactive chatbot for visitors.
-- **Responsive**: Mobile-first design.
+## Local development
 
-## 🚀 Quick Start
+```bash
+npm install
+npm run dev
+```
 
-1. **Clone & Install**
-   ```bash
-   git clone <your-repo-url>
-   npm install
-   ```
+## Deploy to Vercel (Notion data available)
 
-2. **Configure Environment**
-   Create a `.env` file:
-   ```env
-   REACT_APP_NOTION_TOKEN=your_token
-   REACT_APP_NOTION_DATABASE_ID=your_database_id
-   API_KEY=your_google_ai_key
-   ```
+This project now reads Notion data through a Vercel Serverless Function at `api/notion.ts`.
+Your Notion token stays on the server side and is not exposed in the browser.
 
-3. **Run Locally**
-   ```bash
-   npm run dev
-   ```
+### Required environment variables (Vercel Project Settings)
 
-4. **Deploy**
-   Push to GitHub main branch to trigger the deployment workflow (configured in `.github/workflows/deploy.yml`).
+```env
+NOTION_TOKEN=secret_xxx
+NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# optional: profile page icon source
+NOTION_PROFILE_PAGE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
 
----
-© 2024 HEYIWEN Studio
+> Important: Share your Notion database/page with the integration connected to `NOTION_TOKEN`, otherwise the API will return permission errors.
+
+## Notion database property mapping
+
+Use these property names in your database:
+
+- `Title` (title)
+- `Summary` (rich text)
+- `Date` (date)
+- `Cover` (files)
+- `Tags` (multi-select)
+- `Featured` (checkbox, optional)
+
+## Build
+
+```bash
+npm run build
+```
+
+## Troubleshooting (Vercel 显示错误)
+
+If Vercel shows runtime errors, check these first:
+
+1. `NOTION_TOKEN` and `NOTION_DATABASE_ID` are configured in **Vercel Project Settings → Environment Variables** (for Production / Preview / Development).
+2. Your Notion database is shared with the integration used by `NOTION_TOKEN`.
+3. Property names in your database either follow the defaults (`Title`, `Summary`, `Date`, `Cover`, `Tags`, `Featured`) or you set custom env vars:
+   - `NOTION_TITLE_PROPERTY`
+   - `NOTION_SUMMARY_PROPERTY`
+   - `NOTION_DATE_PROPERTY`
+   - `NOTION_COVER_PROPERTY`
+   - `NOTION_TAGS_PROPERTY`
+   - `NOTION_FEATURED_PROPERTY`
+
+For Windows local debugging:
+
+```powershell
+cd "C:\Users\Lenovo\OneDrive\文档\New project 3"
+npm run dev
+```

@@ -1,0 +1,87 @@
+import { NotionBlock, Project, ProjectType } from '../types';
+
+const API_BASE = '/api/notion';
+
+type Avatar = { type: 'url' | 'emoji'; value: string };
+
+const fallbackProjects: Project[] = [
+  {
+    id: 'local-demo-1',
+    title: 'Notion integration pending',
+    coverImage:
+      'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=2070&auto=format&fit=crop',
+    summary:
+      'Set NOTION_TOKEN and NOTION_DATABASE_ID in Vercel project settings to load live data.',
+    tags: [ProjectType.UI_DESIGN, ProjectType.FRONTEND],
+    date: '2026',
+    blocks: [
+      {
+        id: 'local-block-1',
+        type: 'paragraph',
+        content: 'Live content will appear here after Notion environment variables are configured.',
+      },
+    ],
+    featured: true,
+  },
+];
+
+const fallbackAvatar: Avatar = {
+  type: 'emoji',
+  value: '👋',
+};
+
+function withFreshness(url: string) {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}t=${Date.now()}`;
+}
+
+async function safeJson<T>(input: Response): Promise<T | null> {
+  try {
+    return (await input.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function getProjects(): Promise<Project[]> {
+  try {
+    const response = await fetch(withFreshness(`${API_BASE}?action=projects`), {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      const error = await safeJson<{ error?: string }>(response);
+      console.warn(`Projects API failed: ${response.status}`, error?.error ?? 'No error body');
+      return fallbackProjects;
+    }
+
+    const data = await safeJson<{ projects?: Project[] }>(response);
+    if (!data?.projects?.length) return fallbackProjects;
+    return data.projects;
+  } catch (error) {
+    console.warn('Could not fetch projects from API:', error);
+    return fallbackProjects;
+  }
+}
+
+export async function getProfileIcon(): Promise<Avatar> {
+  try {
+    const response = await fetch(withFreshness(`${API_BASE}?action=profile-icon`), {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) return fallbackAvatar;
+
+    const data = await safeJson<{ avatar?: Avatar }>(response);
+    return data?.avatar ?? fallbackAvatar;
+  } catch (error) {
+    console.warn('Could not fetch avatar from API:', error);
+    return fallbackAvatar;
+  }
+}
+
+export function normalizeBlocks(blocks: NotionBlock[]): NotionBlock[] {
+  return blocks.filter((block) => block.content?.trim().length || block.metadata?.url);
+}
