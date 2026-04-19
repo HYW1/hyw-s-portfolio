@@ -47,6 +47,17 @@ type VercelLikeResponse = {
   setHeader: (name: string, value: string) => void;
 };
 
+class NotionApiError extends Error {
+  status: number;
+  body: string;
+
+  constructor(status: number, body: string, hint = '') {
+    super(`Notion API ${status}: ${body}${hint}`);
+    this.status = status;
+    this.body = body;
+  }
+}
+
 function normalizeEnvValue(value: string) {
   return value
     .trim()
@@ -87,6 +98,7 @@ function findFirstExistingProperty(properties: Record<string, any>, candidates: 
   for (const key of candidates) {
     if (properties?.[key] !== undefined) return properties[key];
   }
+
   return undefined;
 }
 
@@ -95,8 +107,11 @@ function readTitle(properties: Record<string, any>): string {
     databaseTitleProperty,
     'Name',
     'Title',
+    'Project',
     '标题',
+    '项目',
     '项目名称',
+    '作品名称',
   ]);
 
   return readPropertyText(titleProp) || 'Untitled project';
@@ -107,8 +122,10 @@ function readSummary(properties: Record<string, any>): string {
     databaseSummaryProperty,
     'Summary',
     'Description',
+    'Intro',
     '摘要',
     '简介',
+    '项目简介',
   ]);
 
   return readPropertyText(summaryProp);
@@ -119,9 +136,10 @@ function readDate(properties: Record<string, any>, createdTime: string): string 
     databaseDateProperty,
     'Date',
     'Timeline',
+    'Year',
     '日期',
     '时间',
-    'Year',
+    '年份',
   ]);
 
   const dateRaw = readPropertyText(dateProp) || createdTime;
@@ -133,9 +151,12 @@ function readCoverImage(page: any, properties: Record<string, any>) {
   const coverProp = findFirstExistingProperty(properties, [
     databaseCoverProperty,
     'Cover',
-    '封面',
+    'Cover Image',
     'Image',
     'Photo',
+    '封面',
+    '封面图',
+    '图片',
   ]);
 
   const coverFile = coverProp?.files?.[0];
@@ -153,7 +174,6 @@ function mapSelectArray(options?: Array<{ name?: string }>): string[] {
     UI: 'UI 设计',
     UX: '用户体验研究',
     Branding: '品牌设计',
-    '品牌设计': '品牌设计',
     Frontend: '前端开发',
   };
 
@@ -161,6 +181,17 @@ function mapSelectArray(options?: Array<{ name?: string }>): string[] {
     const name = option.name?.trim() || 'UI 设计';
     return aliases[name] || name;
   });
+}
+
+function readTags(property: any): string[] {
+  if (!property) return ['UI 设计'];
+  if (property.type === 'multi_select') return mapSelectArray(property.multi_select);
+  if (property.type === 'select') return mapSelectArray(property.select ? [property.select] : undefined);
+  if (property.type === 'status') return mapSelectArray(property.status ? [property.status] : undefined);
+
+  const text = readPropertyText(property);
+  if (!text) return ['UI 设计'];
+  return text.split(/[,，/、]/).map((tag) => tag.trim()).filter(Boolean);
 }
 
 function shouldPublish(properties: Record<string, any>) {
@@ -171,12 +202,21 @@ function shouldPublish(properties: Record<string, any>) {
     'Visible',
     '公开',
     '发布',
+    '展示',
   ]);
 
   if (!property) return true;
   if (property.type === 'checkbox') return property.checkbox;
   if (property.type === 'status') return !['draft', 'hidden', 'archived'].includes(String(property.status?.name || '').toLowerCase());
   return true;
+}
+
+function readFeatured(property: any): boolean {
+  if (!property) return false;
+  if (property.type === 'checkbox') return Boolean(property.checkbox);
+  if (property.type === 'select') return /featured|精选|推荐/i.test(property.select?.name || '');
+  if (property.type === 'status') return /featured|精选|推荐/i.test(property.status?.name || '');
+  return false;
 }
 
 function defaultBlocks(summary: string): NotionBlock[] {
@@ -209,10 +249,75 @@ async function notionFetch(path: string, options: RequestInit = {}) {
     const hint = response.status === 401
       ? ' Check that NOTION_TOKEN is the Internal Integration Secret, not the integration id or database id.'
       : '';
-    throw new Error(`Notion API ${response.status}: ${text}${hint}`);
+    throw new NotionApiError(response.status, text, hint);
   }
 
   return response.json();
+}
+
+function isPageInsteadOfDatabaseError(error: unknown) {
+  return error instanceof NotionApiError
+    && error.status === 400
+    && /page, not a database/i.test(error.body);
+}
+
+async function fetchChildBlocks(blockId: string) {
+  const blocks: any[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const query = new URLSearchParams({ page_size: '100' });
+    if (cursor) query.set('start_cursor', cursor);
+
+    const data = await notionFetch(`/blocks/${blockId}/children?${query.toString()}`);
+    if (Array.isArray(data.results)) blocks.push(...data.results);
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+
+  return blocks;
+}
+
+async function findDatabaseInsidePage(pageId: string, depth = 2): Promise<string | null> {
+  if (depth < 0) return null;
+
+  const blocks = await fetchChildBlocks(pageId);
+  const directDatabase = blocks.find((block) => block.type === 'child_database');
+  if (directDatabase?.id) return directDatabase.id;
+
+  for (const block of blocks) {
+    if (!block.has_children) continue;
+
+    const nestedDatabaseId = await findDatabaseInsidePage(block.id, depth - 1);
+    if (nestedDatabaseId) return nestedDatabaseId;
+  }
+
+  return null;
+}
+
+async function queryProjectsDatabase(id: string) {
+  return notionFetch(`/databases/${id}/query`, {
+    method: 'POST',
+    body: JSON.stringify({ page_size: 50 }),
+  });
+}
+
+async function queryConfiguredProjectsDatabase() {
+  if (!databaseId) {
+    throw new Error('NOTION_DATABASE_ID is missing. Configure it in Vercel Project Settings > Environment Variables.');
+  }
+
+  try {
+    return await queryProjectsDatabase(databaseId);
+  } catch (error) {
+    if (!isPageInsteadOfDatabaseError(error)) throw error;
+
+    const discoveredDatabaseId = await findDatabaseInsidePage(databaseId);
+    if (!discoveredDatabaseId) {
+      throw new Error('NOTION_DATABASE_ID points to a page, but no child database/table was found inside that page.');
+    }
+
+    return queryProjectsDatabase(discoveredDatabaseId);
+  }
 }
 
 function mapBlock(block: any): NotionBlock | null {
@@ -249,35 +354,15 @@ function mapBlock(block: any): NotionBlock | null {
 }
 
 async function fetchBlocks(pageId: string): Promise<NotionBlock[]> {
-  const blocks: NotionBlock[] = [];
-  let cursor: string | undefined;
+  const childBlocks = await fetchChildBlocks(pageId);
 
-  do {
-    const query = new URLSearchParams({ page_size: '100' });
-    if (cursor) query.set('start_cursor', cursor);
-
-    const data = await notionFetch(`/blocks/${pageId}/children?${query.toString()}`);
-    const nextBlocks = Array.isArray(data.results)
-      ? data.results.map(mapBlock).filter((block: NotionBlock | null): block is NotionBlock => Boolean(block?.content?.trim() || block?.metadata?.url))
-      : [];
-
-    blocks.push(...nextBlocks);
-    cursor = data.has_more ? data.next_cursor : undefined;
-  } while (cursor);
-
-  return blocks;
+  return childBlocks
+    .map(mapBlock)
+    .filter((block: NotionBlock | null): block is NotionBlock => Boolean(block?.content?.trim() || block?.metadata?.url));
 }
 
 async function fetchProjects(): Promise<Project[]> {
-  if (!databaseId) {
-    throw new Error('NOTION_DATABASE_ID is missing. Configure it in Vercel Project Settings > Environment Variables.');
-  }
-
-  const data = await notionFetch(`/databases/${databaseId}/query`, {
-    method: 'POST',
-    body: JSON.stringify({ page_size: 50 }),
-  });
-
+  const data = await queryConfiguredProjectsDatabase();
   const results = Array.isArray(data.results) ? data.results : [];
   const publishedResults = results.filter((item: any) => shouldPublish(item.properties || {}));
 
@@ -288,7 +373,7 @@ async function fetchProjects(): Promise<Project[]> {
       const summary = readSummary(properties);
       const date = readDate(properties, item.created_time);
       const coverImage = readCoverImage(item, properties);
-      const tagsProp = findFirstExistingProperty(properties, [databaseTagsProperty, 'Tags', '标签']);
+      const tagsProp = findFirstExistingProperty(properties, [databaseTagsProperty, 'Tags', '标签', '类型', 'Category']);
       const featuredProp = findFirstExistingProperty(properties, [databaseFeaturedProperty, 'Featured', '推荐', '首页精选']);
       const blocks = await fetchBlocks(item.id).catch(() => defaultBlocks(summary));
 
@@ -298,9 +383,9 @@ async function fetchProjects(): Promise<Project[]> {
         summary,
         date,
         coverImage,
-        tags: mapSelectArray(tagsProp?.multi_select),
+        tags: readTags(tagsProp),
         blocks: blocks.length ? blocks : defaultBlocks(summary),
-        featured: featuredProp?.type === 'checkbox' ? Boolean(featuredProp.checkbox) : false,
+        featured: readFeatured(featuredProp),
       };
     }),
   );
