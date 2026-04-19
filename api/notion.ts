@@ -1,9 +1,10 @@
 const NOTION_API_VERSION = '2022-06-28';
 const NOTION_BASE = 'https://api.notion.com/v1';
+const DEFAULT_PROFILE_PAGE_ID = '306c8f7e494f80fe9e07db59d9d4005f';
 
 const token = readEnv('NOTION_TOKEN', 'NOTION_API_KEY', 'NOTION_SECRET', 'VITE_NOTION_TOKEN', 'REACT_APP_NOTION_TOKEN');
 const databaseId = readEnv('NOTION_DATABASE_ID', 'VITE_NOTION_DATABASE_ID', 'REACT_APP_NOTION_DATABASE_ID');
-const profilePageId = readEnv('NOTION_PROFILE_PAGE_ID', 'VITE_NOTION_PROFILE_PAGE_ID', 'REACT_APP_NOTION_PROFILE_PAGE_ID');
+const profilePageId = readEnv('NOTION_PROFILE_PAGE_ID', 'VITE_NOTION_PROFILE_PAGE_ID', 'REACT_APP_NOTION_PROFILE_PAGE_ID') || DEFAULT_PROFILE_PAGE_ID;
 const databaseTitleProperty = readEnv('NOTION_TITLE_PROPERTY') || 'Title';
 const databaseSummaryProperty = readEnv('NOTION_SUMMARY_PROPERTY') || 'Summary';
 const databaseDateProperty = readEnv('NOTION_DATE_PROPERTY') || 'Date';
