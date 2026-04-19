@@ -46,9 +46,19 @@ type VercelLikeResponse = {
   setHeader: (name: string, value: string) => void;
 };
 
+function normalizeEnvValue(value: string) {
+  return value
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .trim()
+    .replace(/^authorization:\s*bearer\s+/i, '')
+    .replace(/^bearer\s+/i, '')
+    .trim();
+}
+
 function readEnv(...keys: string[]) {
   for (const key of keys) {
-    const value = process.env[key]?.trim().replace(/^['"]|['"]$/g, '');
+    const value = process.env[key] ? normalizeEnvValue(process.env[key] || '') : undefined;
     if (value) return value;
   }
 
@@ -195,7 +205,10 @@ async function notionFetch(path: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Notion API ${response.status}: ${text}`);
+    const hint = response.status === 401
+      ? ' Check that NOTION_TOKEN is the Internal Integration Secret, not the integration id or database id.'
+      : '';
+    throw new Error(`Notion API ${response.status}: ${text}${hint}`);
   }
 
   return response.json();
